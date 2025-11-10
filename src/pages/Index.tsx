@@ -112,7 +112,24 @@ export default function Index() {
     const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
 
     if (isLogin) {
-      const user = users.find(u => u.username === username && u.password === password);
+      let user = users.find(u => u.username === username && u.password === password);
+      
+      if (!user && username === 'admin' && password === 'admin') {
+        user = {
+          id: 'admin',
+          username: 'admin',
+          password: 'admin',
+          displayName: 'Администратор',
+          avatar: '👑',
+          avatarColor: 'linear-gradient(135deg, #8B5CF6 0%, #D946EF 100%)',
+          role: 'admin',
+          status: 'active',
+          level: 'premium'
+        };
+        users.push(user);
+        localStorage.setItem('users', JSON.stringify(users));
+      }
+      
       if (user) {
         if (user.status === 'banned') {
           toast({ title: 'Доступ запрещён', description: 'Ваш аккаунт заблокирован', variant: 'destructive' });
@@ -145,7 +162,7 @@ export default function Index() {
         displayName,
         avatar: selectedAvatar,
         avatarColor: selectedColor,
-        role: 'user',
+        role: username === 'admin' ? 'admin' : 'user',
         status: 'active',
         level: 'new'
       };
@@ -230,6 +247,76 @@ export default function Index() {
   const filteredChats = chats.filter(chat => 
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleBanUser = (userId: string) => {
+    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      users[userIndex].status = users[userIndex].status === 'banned' ? 'active' : 'banned';
+      localStorage.setItem('users', JSON.stringify(users));
+      toast({ 
+        title: users[userIndex].status === 'banned' ? 'Пользователь заблокирован' : 'Блокировка снята',
+        description: `@${users[userIndex].username}` 
+      });
+    }
+  };
+
+  const handleFreezeUser = (userId: string) => {
+    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      users[userIndex].status = users[userIndex].status === 'frozen' ? 'active' : 'frozen';
+      localStorage.setItem('users', JSON.stringify(users));
+      toast({ 
+        title: users[userIndex].status === 'frozen' ? 'Аккаунт заморожен' : 'Аккаунт разморожен',
+        description: `@${users[userIndex].username}` 
+      });
+    }
+  };
+
+  const handleToggleAdmin = (userId: string) => {
+    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      users[userIndex].role = users[userIndex].role === 'admin' ? 'user' : 'admin';
+      localStorage.setItem('users', JSON.stringify(users));
+      toast({ 
+        title: users[userIndex].role === 'admin' ? 'Администратор назначен' : 'Права администратора сняты',
+        description: `@${users[userIndex].username}` 
+      });
+    }
+  };
+
+  const handleToggleChatVerified = (chatId: string) => {
+    const updatedChats = chats.map(chat => 
+      chat.id === chatId ? { ...chat, verified: !chat.verified } : chat
+    );
+    setChats(updatedChats);
+    localStorage.setItem('chats', JSON.stringify(updatedChats));
+    toast({ title: 'Статус канала изменён' });
+  };
+
+  const handleToggleChatScam = (chatId: string) => {
+    const updatedChats = chats.map(chat => 
+      chat.id === chatId ? { ...chat, scam: !chat.scam } : chat
+    );
+    setChats(updatedChats);
+    localStorage.setItem('chats', JSON.stringify(updatedChats));
+    toast({ title: 'SCAM метка изменена' });
+  };
+
+  const handleBoostSubscribers = (chatId: string) => {
+    const updatedChats = chats.map(chat => 
+      chat.id === chatId && chat.subscribers 
+        ? { ...chat, subscribers: chat.subscribers + Math.floor(Math.random() * 500) + 100 } 
+        : chat
+    );
+    setChats(updatedChats);
+    localStorage.setItem('chats', JSON.stringify(updatedChats));
+    toast({ title: 'Подписчики накручены! 🚀' });
+  };
+
+  const [adminTab, setAdminTab] = useState<'users' | 'chats' | 'stats'>('users');
 
   if (!currentUser) {
     return (
@@ -626,37 +713,83 @@ export default function Index() {
           <div className="flex-1 p-8 overflow-auto">
             <Card className="glass-effect border-purple-500/20 p-6 animate-fadeIn">
               <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-                Админ-панель
+                👑 Админ-панель
               </h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <Card className="p-4 bg-purple-500/10 border-purple-500/30">
-                    <p className="text-sm text-gray-400">Всего пользователей</p>
-                    <p className="text-3xl font-bold">
-                      {JSON.parse(localStorage.getItem('users') || '[]').length}
-                    </p>
-                  </Card>
-                  <Card className="p-4 bg-purple-500/10 border-purple-500/30">
-                    <p className="text-sm text-gray-400">Активных чатов</p>
-                    <p className="text-3xl font-bold">{chats.length}</p>
-                  </Card>
-                  <Card className="p-4 bg-purple-500/10 border-purple-500/30">
-                    <p className="text-sm text-gray-400">Сообщений</p>
-                    <p className="text-3xl font-bold">
-                      {Object.keys(localStorage).filter(k => k.startsWith('messages_')).length}
-                    </p>
-                  </Card>
-                </div>
 
-                <div>
+              <Tabs value={adminTab} onValueChange={(v) => setAdminTab(v as any)} className="mb-6">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="users">Пользователи</TabsTrigger>
+                  <TabsTrigger value="chats">Чаты</TabsTrigger>
+                  <TabsTrigger value="stats">Статистика</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="stats" className="space-y-4 mt-6">
+                  <div className="grid grid-cols-3 gap-4">
+                    <Card className="p-4 bg-purple-500/10 border-purple-500/30">
+                      <p className="text-sm text-gray-400">Всего пользователей</p>
+                      <p className="text-3xl font-bold">
+                        {JSON.parse(localStorage.getItem('users') || '[]').length}
+                      </p>
+                    </Card>
+                    <Card className="p-4 bg-purple-500/10 border-purple-500/30">
+                      <p className="text-sm text-gray-400">Активных чатов</p>
+                      <p className="text-3xl font-bold">{chats.length}</p>
+                    </Card>
+                    <Card className="p-4 bg-purple-500/10 border-purple-500/30">
+                      <p className="text-sm text-gray-400">Всего сообщений</p>
+                      <p className="text-3xl font-bold">
+                        {Object.keys(localStorage).filter(k => k.startsWith('messages_')).reduce((acc, key) => {
+                          return acc + JSON.parse(localStorage.getItem(key) || '[]').length;
+                        }, 0)}
+                      </p>
+                    </Card>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Card className="p-4 bg-green-500/10 border-green-500/30">
+                      <p className="text-sm text-gray-400">Активных пользователей</p>
+                      <p className="text-3xl font-bold text-green-400">
+                        {JSON.parse(localStorage.getItem('users') || '[]').filter((u: User) => u.status === 'active').length}
+                      </p>
+                    </Card>
+                    <Card className="p-4 bg-red-500/10 border-red-500/30">
+                      <p className="text-sm text-gray-400">Заблокированных</p>
+                      <p className="text-3xl font-bold text-red-400">
+                        {JSON.parse(localStorage.getItem('users') || '[]').filter((u: User) => u.status === 'banned').length}
+                      </p>
+                    </Card>
+                  </div>
+
+                  <Card className="p-4 bg-purple-500/10 border-purple-500/30">
+                    <h3 className="text-lg font-semibold mb-2">Последняя активность</h3>
+                    <div className="space-y-2">
+                      {Object.keys(localStorage)
+                        .filter(k => k.startsWith('messages_'))
+                        .slice(0, 5)
+                        .map(key => {
+                          const msgs: Message[] = JSON.parse(localStorage.getItem(key) || '[]');
+                          const lastMsg = msgs[msgs.length - 1];
+                          if (!lastMsg) return null;
+                          const chat = chats.find(c => c.id === lastMsg.chatId);
+                          return (
+                            <div key={key} className="text-sm text-gray-300">
+                              📨 {chat?.name || 'Неизвестный чат'}: {msgs.length} сообщений
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="users" className="mt-6">
                   <h3 className="text-xl font-semibold mb-4">Управление пользователями</h3>
-                  <ScrollArea className="h-96">
+                  <ScrollArea className="h-[600px]">
                     {JSON.parse(localStorage.getItem('users') || '[]').map((user: User) => (
-                      <Card key={user.id} className="p-4 mb-2 bg-black/30 border-purple-500/20">
-                        <div className="flex items-center justify-between">
+                      <Card key={user.id} className="p-4 mb-3 bg-black/30 border-purple-500/20">
+                        <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
+                              className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
                               style={{ background: user.avatarColor }}
                             >
                               {user.avatar}
@@ -667,17 +800,137 @@ export default function Index() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Badge variant={user.status === 'active' ? 'default' : 'destructive'}>
-                              {user.status}
+                            <Badge variant={user.status === 'active' ? 'default' : user.status === 'banned' ? 'destructive' : 'secondary'}>
+                              {user.status === 'active' && '✅ Active'}
+                              {user.status === 'banned' && '🚫 Banned'}
+                              {user.status === 'frozen' && '❄️ Frozen'}
                             </Badge>
-                            {user.role === 'admin' && <Badge className="gradient-purple">Admin</Badge>}
+                            {user.role === 'admin' && <Badge className="gradient-purple">👑 Admin</Badge>}
+                            <Badge variant="outline">
+                              {user.level === 'new' && '🌱 Новичок'}
+                              {user.level === 'active' && '⚡ Активный'}
+                              {user.level === 'premium' && '💎 Премиум'}
+                            </Badge>
                           </div>
+                        </div>
+                        
+                        {user.id !== currentUser.id && (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={user.status === 'banned' ? 'default' : 'destructive'}
+                              onClick={() => handleBanUser(user.id)}
+                              className="flex-1"
+                            >
+                              <Icon name={user.status === 'banned' ? 'UserCheck' : 'UserX'} size={16} className="mr-1" />
+                              {user.status === 'banned' ? 'Разбанить' : 'Забанить'}
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleFreezeUser(user.id)}
+                              className="flex-1"
+                            >
+                              <Icon name={user.status === 'frozen' ? 'Flame' : 'Snowflake'} size={16} className="mr-1" />
+                              {user.status === 'frozen' ? 'Разморозить' : 'Заморозить'}
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleToggleAdmin(user.id)}
+                              className="flex-1"
+                            >
+                              <Icon name="Shield" size={16} className="mr-1" />
+                              {user.role === 'admin' ? 'Снять админа' : 'Дать админа'}
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="chats" className="mt-6">
+                  <h3 className="text-xl font-semibold mb-4">Управление чатами и каналами</h3>
+                  <ScrollArea className="h-[600px]">
+                    {chats.map((chat) => (
+                      <Card key={chat.id} className="p-4 mb-3 bg-black/30 border-purple-500/20">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-2xl">
+                              {chat.avatar}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold">{chat.name}</p>
+                                {chat.verified && <Icon name="BadgeCheck" size={16} className="text-blue-400" />}
+                                {chat.scam && <Badge variant="destructive" className="text-xs">SCAM</Badge>}
+                              </div>
+                              <p className="text-sm text-gray-400">
+                                {chat.type === 'chat' && '💬 Чат'}
+                                {chat.type === 'channel' && '📢 Канал'}
+                                {chat.type === 'group' && '👥 Группа'}
+                                {chat.subscribers && ` • ${chat.subscribers} подписчиков`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant={chat.verified ? 'default' : 'outline'}
+                            onClick={() => handleToggleChatVerified(chat.id)}
+                            className="flex-1"
+                          >
+                            <Icon name="BadgeCheck" size={16} className="mr-1" />
+                            {chat.verified ? 'Убрать галочку' : 'Верифицировать'}
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant={chat.scam ? 'destructive' : 'outline'}
+                            onClick={() => handleToggleChatScam(chat.id)}
+                            className="flex-1"
+                          >
+                            <Icon name="AlertTriangle" size={16} className="mr-1" />
+                            {chat.scam ? 'Убрать SCAM' : 'Отметить SCAM'}
+                          </Button>
+                          
+                          {chat.subscribers && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleBoostSubscribers(chat.id)}
+                              className="flex-1"
+                            >
+                              <Icon name="TrendingUp" size={16} className="mr-1" />
+                              Накрутить +
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              handleSelectChat(chat);
+                              setView('messenger');
+                            }}
+                            className="w-full"
+                          >
+                            <Icon name="Eye" size={16} className="mr-1" />
+                            Просмотреть чат
+                          </Button>
                         </div>
                       </Card>
                     ))}
                   </ScrollArea>
-                </div>
-              </div>
+                </TabsContent>
+              </Tabs>
             </Card>
           </div>
         )}
